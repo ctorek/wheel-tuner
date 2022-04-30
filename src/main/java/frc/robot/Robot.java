@@ -4,6 +4,8 @@
 
 package frc.robot;
 
+import java.util.List;
+
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.SparkMaxPIDController;
 import com.revrobotics.CANSparkMax.ControlType;
@@ -11,13 +13,18 @@ import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.motorcontrol.Spark;
+import edu.wpi.first.wpilibj.shuffleboard.BuiltInWidgets;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardComponent;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
+import edu.wpi.first.wpilibj.shuffleboard.SuppliedValueWidget;
+import edu.wpi.first.wpilibj.shuffleboard.WidgetType;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -34,12 +41,6 @@ public class Robot extends TimedRobot {
   private CANSparkMax frontRight;
   private CANSparkMax backRight;
 
-  // PID Controllers
-  private SparkMaxPIDController frontLeftController;
-  private SparkMaxPIDController backLeftController;
-  private SparkMaxPIDController frontRightController;
-  private SparkMaxPIDController backRightController;
-
   // Feedforward
   private SimpleMotorFeedforward feedforward;
 
@@ -55,11 +56,14 @@ public class Robot extends TimedRobot {
   private NetworkTableEntry dEntry;
   private NetworkTableEntry maxVelEntry;
 
-  private NetworkTableEntry sEntry;
-  private NetworkTableEntry vEntry;
-
   private NetworkTableEntry setpointEntry;
   private NetworkTableEntry outputEntry;
+
+  private NetworkTableEntry setpointMetersPerSec;
+  private NetworkTableEntry outputMetersPerSec;
+
+  private double graphedValues[] = new double[2];
+  private SuppliedValueWidget<double[]> graph;
 
   // PID values
   double p = 0.0;
@@ -68,7 +72,7 @@ public class Robot extends TimedRobot {
 
   // Feedforward values
   double s = 0.0;
-  double v = 0.0;
+  double v = 0.1335;
 
   // Maximum velocity in RPM
   double vel = 2000.0;
@@ -78,6 +82,9 @@ public class Robot extends TimedRobot {
 
   // Current output in RPM
   double output = 0.0;
+
+  // Math stuff
+  double circumference = Units.inchesToMeters(6 * Math.PI);
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -91,12 +98,6 @@ public class Robot extends TimedRobot {
     frontRight = new CANSparkMax(3, MotorType.kBrushless);
     backRight = new CANSparkMax(4, MotorType.kBrushless);
 
-    // Controller initializations
-    frontLeftController = frontLeft.getPIDController();
-    backLeftController = backLeft.getPIDController();
-    frontRightController = frontRight.getPIDController();
-    backRightController = backRight.getPIDController();
-
     // Feedforward
     feedforward = new SimpleMotorFeedforward(s, v);
 
@@ -104,23 +105,29 @@ public class Robot extends TimedRobot {
     joystick = new Joystick(0);
     
     // Chooser options
-    chooser.setDefaultOption("Front left (1)", frontLeft);
-    chooser.addOption("Back left (2)", backLeft);
-    chooser.addOption("Front right (3)", frontRight);
-    chooser.addOption("Back right (4)", backRight);
+    chooser.setDefaultOption(String.format("Front left (%d)", frontLeft.getDeviceId()), frontLeft);
+    chooser.addOption(String.format("Back left (%d)", backLeft.getDeviceId()), backLeft);
+    chooser.addOption(String.format("Front right (%d)", frontRight.getDeviceId()), frontRight);
+    chooser.addOption(String.format("Back right (%d)", backRight.getDeviceId()), backRight);
 
-    SmartDashboard.putData(chooser);
+    tab.add("Motor selection", chooser);
 
     pEntry = tab.add("P value", p).getEntry();
     iEntry = tab.add("I value", i).getEntry();
     dEntry = tab.add("D value", d).getEntry();
     maxVelEntry = tab.add("Max velocity", vel).getEntry();
 
-    sEntry = tab.add("S value", s).getEntry();
-    vEntry = tab.add("V value", v).getEntry();
+    setpointEntry = tab.add("Setpoint (RPM)", setpoint).getEntry();
+    outputEntry = tab.add("Output (RPM)", output).getEntry();
 
-    setpointEntry = tab.add("Setpoint", setpoint).getEntry();
-    outputEntry = tab.add("Output", output).getEntry();
+    setpointMetersPerSec = tab.add("Setpoint (m per s)", setpoint).getEntry();
+    outputMetersPerSec = tab.add("Output (m per s)", output).getEntry();
+
+    graphedValues[0] = output;
+    graphedValues[1] = setpoint;
+
+    graph = tab.addDoubleArray("Velocity vs Setpoint", () -> graphedValues)
+      .withWidget(BuiltInWidgets.kGraph);
   }
 
   /**
@@ -147,7 +154,25 @@ public class Robot extends TimedRobot {
     motor.getPIDController().setD(d);
 
     // Send motor output to dashboard
-    outputEntry.setDouble(motor.getEncoder().getVelocity());
+    output = motor.getEncoder().getVelocity();
+    outputEntry.setDouble(output);
+
+    // Graph output vs setpoint on dashboard
+    graphedValues[0] = output;
+    graphedValues[1] = setpoint;
+
+    // Drive motor at joystick speed
+    double percent = -MathUtil.applyDeadband(joystick.getY(), 0.15);
+    double velocity = feedforward.calculate(percent * vel / 60);
+    motor.getPIDController().setReference(velocity, ControlType.kVoltage);
+
+    // Send setpoint to dashboard
+    setpoint = percent * vel;
+    setpointEntry.setDouble(setpoint);
+
+    // Sending values in m/s
+    setpointMetersPerSec.setDouble(setpoint * circumference/60);
+    outputMetersPerSec.setDouble(output * circumference/60);
   }
 
   /**
@@ -173,17 +198,7 @@ public class Robot extends TimedRobot {
 
   /** This function is called periodically during operator control. */
   @Override
-  public void teleopPeriodic() {
-    // Get selected motor
-    var motor = chooser.getSelected();
-
-    // Drive motor at joystick speed
-    double percent = -MathUtil.applyDeadband(joystick.getY(), 0.15);
-    motor.getPIDController().setReference(percent * vel, ControlType.kVelocity);
-
-    // Send setpoint to dashboard
-    setpointEntry.setDouble(percent * vel);
-  }
+  public void teleopPeriodic() {}
 
   /** This function is called once when the robot is disabled. */
   @Override
