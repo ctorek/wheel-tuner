@@ -11,9 +11,13 @@ import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.motorcontrol.Spark;
+import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -42,8 +46,20 @@ public class Robot extends TimedRobot {
   // Controller
   private Joystick joystick;
 
-  // Wheel selector
+  // Shuffleboard stuff
+  private final ShuffleboardTab tab = Shuffleboard.getTab("Wheel Tuning");
   private final SendableChooser<CANSparkMax> chooser = new SendableChooser<>();
+
+  private NetworkTableEntry pEntry;
+  private NetworkTableEntry iEntry;
+  private NetworkTableEntry dEntry;
+  private NetworkTableEntry maxVelEntry;
+
+  private NetworkTableEntry sEntry;
+  private NetworkTableEntry vEntry;
+
+  private NetworkTableEntry setpointEntry;
+  private NetworkTableEntry outputEntry;
 
   // PID values
   double p = 0.0;
@@ -95,19 +111,16 @@ public class Robot extends TimedRobot {
 
     SmartDashboard.putData(chooser);
 
-    // PID config values
-    SmartDashboard.putNumber("P value", p);
-    SmartDashboard.putNumber("I value", i);
-    SmartDashboard.putNumber("D value", d);
-    SmartDashboard.putNumber("Max velocity", vel);
+    pEntry = tab.add("P value", p).getEntry();
+    iEntry = tab.add("I value", i).getEntry();
+    dEntry = tab.add("D value", d).getEntry();
+    maxVelEntry = tab.add("Max velocity", vel).getEntry();
 
-    // Feedforward config values
-    SmartDashboard.putNumber("S value", s);
-    SmartDashboard.putNumber("V value", v);
+    sEntry = tab.add("S value", s).getEntry();
+    vEntry = tab.add("V value", v).getEntry();
 
-    // Dashboard graph values
-    SmartDashboard.putNumber("Setpoint", setpoint);
-    SmartDashboard.putNumber("Output", output);
+    setpointEntry = tab.add("Setpoint", setpoint).getEntry();
+    outputEntry = tab.add("Output", output).getEntry();
   }
 
   /**
@@ -123,10 +136,10 @@ public class Robot extends TimedRobot {
     var motor = chooser.getSelected();
 
     // Get new PID values from dashboard
-    p = SmartDashboard.getNumber("P value", p);
-    i = SmartDashboard.getNumber("I value", i);
-    d = SmartDashboard.getNumber("D value", d);
-    vel = SmartDashboard.getNumber("Max velocity", vel);
+    p = pEntry.getDouble(p);
+    i = iEntry.getDouble(i);
+    d = dEntry.getDouble(d);
+    vel = maxVelEntry.getDouble(vel);
 
     // Update PID to current values
     motor.getPIDController().setP(p);
@@ -134,7 +147,7 @@ public class Robot extends TimedRobot {
     motor.getPIDController().setD(d);
 
     // Send motor output to dashboard
-    SmartDashboard.putNumber("Output", motor.getEncoder().getVelocity());
+    outputEntry.setDouble(motor.getEncoder().getVelocity());
   }
 
   /**
@@ -169,7 +182,7 @@ public class Robot extends TimedRobot {
     motor.getPIDController().setReference(percent * vel, ControlType.kVelocity);
 
     // Send setpoint to dashboard
-    SmartDashboard.putNumber("Setpoint", percent * vel);
+    setpointEntry.setDouble(percent * vel);
   }
 
   /** This function is called once when the robot is disabled. */
