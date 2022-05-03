@@ -4,29 +4,23 @@
 
 package frc.robot;
 
-import java.util.List;
-
 import com.revrobotics.CANSparkMax;
-import com.revrobotics.SparkMaxPIDController;
 import com.revrobotics.CANSparkMax.ControlType;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
-import edu.wpi.first.wpilibj.motorcontrol.Spark;
 import edu.wpi.first.wpilibj.shuffleboard.BuiltInWidgets;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
-import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardComponent;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj.shuffleboard.SuppliedValueWidget;
-import edu.wpi.first.wpilibj.shuffleboard.WidgetType;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+
+import frc.robot.Constants;
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -66,25 +60,18 @@ public class Robot extends TimedRobot {
   private SuppliedValueWidget<double[]> graph;
 
   // PID values
-  double p = 0.0;
-  double i = 0.0;
-  double d = 0.0;
-
-  // Feedforward values
-  double s = 0.0;
-  double v = 0.1335;
+  private double p = Constants.DEFAULT_P;
+  private double i = Constants.DEFAULT_I;
+  private double d = Constants.DEFAULT_D;
 
   // Maximum velocity in RPM
-  double vel = 2000.0;
+  private double vel = Constants.DEFAULT_VEL;
 
   // Current setpoint in RPM
-  double setpoint = 0.0;
+  private double setpoint = 0.0;
 
   // Current output in RPM
-  double output = 0.0;
-
-  // Math stuff
-  double circumference = Units.inchesToMeters(6 * Math.PI);
+  private double output = 0.0;
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -93,16 +80,16 @@ public class Robot extends TimedRobot {
   @Override
   public void robotInit() {
     // Motor initializations
-    frontLeft = new CANSparkMax(1,  MotorType.kBrushless);
-    backLeft = new CANSparkMax(2, MotorType.kBrushless);
-    frontRight = new CANSparkMax(3, MotorType.kBrushless);
-    backRight = new CANSparkMax(4, MotorType.kBrushless);
+    frontLeft = new CANSparkMax(Constants.FRONT_LEFT,  MotorType.kBrushless);
+    backLeft = new CANSparkMax(Constants.BACK_LEFT, MotorType.kBrushless);
+    frontRight = new CANSparkMax(Constants.FRONT_RIGHT, MotorType.kBrushless);
+    backRight = new CANSparkMax(Constants.BACK_RIGHT, MotorType.kBrushless);
 
     // Feedforward
-    feedforward = new SimpleMotorFeedforward(s, v);
+    feedforward = new SimpleMotorFeedforward(Constants.DEFAULT_S, Constants.DEFAULT_V);
 
     // Joystick initialization
-    joystick = new Joystick(0);
+    joystick = new Joystick(Constants.JOYSTICK);
     
     // Chooser options
     chooser.setDefaultOption(String.format("Front left (%d)", frontLeft.getDeviceId()), frontLeft);
@@ -123,10 +110,11 @@ public class Robot extends TimedRobot {
     setpointMetersPerSec = tab.add("Setpoint (m per s)", setpoint).getEntry();
     outputMetersPerSec = tab.add("Output (m per s)", output).getEntry();
 
+    // Graph
     graphedValues[0] = output;
     graphedValues[1] = setpoint;
 
-    graph = tab.addDoubleArray("Velocity vs Setpoint", () -> graphedValues)
+    tab.addDoubleArray("Velocity vs Setpoint", () -> graphedValues)
       .withWidget(BuiltInWidgets.kGraph);
   }
 
@@ -171,8 +159,8 @@ public class Robot extends TimedRobot {
     setpointEntry.setDouble(setpoint);
 
     // Sending values in m/s
-    setpointMetersPerSec.setDouble(setpoint * circumference/60);
-    outputMetersPerSec.setDouble(output * circumference/60);
+    setpointMetersPerSec.setDouble(setpoint * Constants.CIRCUMFERENCE / 60);
+    outputMetersPerSec.setDouble(output * Constants.CIRCUMFERENCE / 60);
   }
 
   /**
